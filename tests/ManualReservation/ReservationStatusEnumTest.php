@@ -3,28 +3,18 @@
 namespace Reach\StatamicResrv\Tests\ManualReservation;
 
 use Carbon\Carbon;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationStatusEnumTest extends TestCase
 {
-    use RefreshDatabase;
-
-    private function awaitingPaymentReservation(array $attributes = []): Reservation
-    {
-        $item = $this->makeStatamicItem();
-
-        return Reservation::factory()->withCustomer()->create(array_merge([
-            'item_id' => $item->id(),
-            'status' => ReservationStatus::AWAITING_PAYMENT->value,
-        ], $attributes));
-    }
+    use CreatesEntries;
 
     public function test_awaiting_payment_can_transition_to_confirmed_and_cancelled_only()
     {

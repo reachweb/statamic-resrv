@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\ActivityLog;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
@@ -24,7 +23,7 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationLogTest extends TestCase
 {
-    use CreatesEntries, RefreshDatabase;
+    use CreatesEntries;
 
     public $entry;
 
@@ -112,10 +111,7 @@ class ReservationLogTest extends TestCase
     public function test_a_manual_reservation_logs_its_cp_creation_and_cp_confirmation()
     {
         $this->signInAdmin();
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer']]);
 
         $reservation = app(ManualReservationCreator::class)->create([
             'item_id' => $this->entry->id(),

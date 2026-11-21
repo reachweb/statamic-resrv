@@ -2,15 +2,12 @@
 
 namespace Reach\StatamicResrv\Tests\Livewire;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Livewire\Extras;
 use Reach\StatamicResrv\Livewire\Options;
 use Reach\StatamicResrv\Models\ChildReservation;
-use Reach\StatamicResrv\Models\Entry as ResrvEntry;
-use Reach\StatamicResrv\Models\Extra as ResrvExtra;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Rate;
@@ -30,7 +27,6 @@ use Statamic\Facades\Blueprint;
 class CheckoutUnitsPerAddonTest extends TestCase
 {
     use CreatesEntries;
-    use RefreshDatabase;
 
     public $entry;
 
@@ -47,7 +43,11 @@ class CheckoutUnitsPerAddonTest extends TestCase
         parent::setUp();
         $this->travelTo(today()->setHour(12));
 
-        $this->createCabinEntry();
+        [$this->entry, $this->double, $this->single, $this->portTaxes] = $this->createCabinEntry(
+            title: 'Cruise cabin',
+            single: ['title' => 'Single'],
+            portTaxes: ['id' => 7],
+        );
 
         // 1 guest on the single rate: 2 berths booked (quantity 2), 75 × 2 nights × 2 = 300.
         $this->solo = Reservation::factory()->withRate($this->single->id)->create([
@@ -289,39 +289,6 @@ class CheckoutUnitsPerAddonTest extends TestCase
             'option_id' => $option->id,
             'value' => $value->id,
         ]);
-    }
-
-    private function createCabinEntry(): void
-    {
-        $this->entry = $this->makeStatamicItemWithAvailability(
-            collection: 'cabins',
-            available: 5,
-            price: 100,
-            rateSlug: 'double',
-            title: 'Cruise cabin',
-        );
-
-        $this->double = Rate::forEntry($this->entry->id())->where('slug', 'double')->first();
-
-        // Stock lives on the base (double) rate; the single rate is priced at -25% of it.
-        $this->single = Rate::factory()->relative()->shared()->unitsPerAddon(2)->create([
-            'collection' => 'cabins',
-            'title' => 'Single',
-            'slug' => 'single',
-            'base_rate_id' => $this->double->id,
-            'modifier_type' => 'percent',
-            'modifier_operation' => 'decrease',
-            'modifier_amount' => 25,
-        ]);
-
-        $this->portTaxes = ResrvExtra::factory()->fixed()->create([
-            'id' => 7,
-            'name' => 'Port taxes',
-            'slug' => 'port-taxes',
-            'price' => '350',
-        ]);
-
-        ResrvEntry::whereItemId($this->entry->id())->extras()->attach($this->portTaxes->id);
     }
 
     // 2 guests on the double rate: quantity 2, 100 × 2 nights × 2 = 400.

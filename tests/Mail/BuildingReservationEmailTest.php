@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Mail;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Reach\StatamicResrv\Events\BuildingReservationEmail;
 use Reach\StatamicResrv\Mail\ReservationConfirmed;
@@ -11,8 +10,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class BuildingReservationEmailTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_event_fires_once_when_mailable_builds()
     {
         Event::fake([BuildingReservationEmail::class]);

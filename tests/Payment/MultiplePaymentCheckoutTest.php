@@ -4,7 +4,6 @@ namespace Reach\StatamicResrv\Tests\Payment;
 
 use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
-use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Checkout;
@@ -49,10 +48,7 @@ class MultiplePaymentCheckoutTest extends TestCase
 
     public function test_redirect_gateway_in_normal_checkout_returns_to_the_checkout_complete_entry()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fakeredirect' => ['class' => FakeRedirectGateway::class, 'label' => 'Fake Redirect'],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['fakeredirect' => ['class' => FakeRedirectGateway::class, 'label' => 'Fake Redirect']]);
 
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -98,19 +94,10 @@ class MultiplePaymentCheckoutTest extends TestCase
 
     public function test_multiple_gateways_shows_picker_at_step_3()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake_one' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake One',
-            ],
-            'fake_two' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake Two',
-            ],
+        $this->useGateways([
+            'fake_one' => ['label' => 'Fake One'],
+            'fake_two' => ['label' => 'Fake Two'],
         ]);
-
-        // Re-register the manager with new config
-        app()->forgetInstance(PaymentGatewayManager::class);
 
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -125,18 +112,10 @@ class MultiplePaymentCheckoutTest extends TestCase
 
     public function test_selecting_gateway_initializes_payment()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake_one' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake One',
-            ],
-            'fake_two' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake Two',
-            ],
+        $this->useGateways([
+            'fake_one' => ['label' => 'Fake One'],
+            'fake_two' => ['label' => 'Fake Two'],
         ]);
-
-        app()->forgetInstance(PaymentGatewayManager::class);
 
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -162,18 +141,10 @@ class MultiplePaymentCheckoutTest extends TestCase
 
     public function test_resubmitting_second_step_clears_stale_payment_state()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake_one' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake One',
-            ],
-            'fake_two' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake Two',
-            ],
+        $this->useGateways([
+            'fake_one' => ['label' => 'Fake One'],
+            'fake_two' => ['label' => 'Fake Two'],
         ]);
-
-        app()->forgetInstance(PaymentGatewayManager::class);
 
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -203,14 +174,7 @@ class MultiplePaymentCheckoutTest extends TestCase
 
     public function test_webhook_with_gateway_param_routes_correctly()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake',
-            ],
-        ]);
-
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['fake' => ['label' => 'Fake']]);
 
         $response = $this->get('/resrv/api/webhook/fake');
         $response->assertOk();
@@ -223,12 +187,10 @@ class MultiplePaymentCheckoutTest extends TestCase
     {
         $this->withExceptionHandling();
 
-        Config::set('resrv-config.payment_gateways', [
-            'fake_one' => ['class' => FakePaymentGateway::class, 'label' => 'Fake One'],
-            'fake_two' => ['class' => FakePaymentGateway::class, 'label' => 'Fake Two'],
+        $this->useGateways([
+            'fake_one' => ['label' => 'Fake One'],
+            'fake_two' => ['label' => 'Fake Two'],
         ]);
-
-        app()->forgetInstance(PaymentGatewayManager::class);
 
         $this->post('/resrv/api/webhook', [
             'reservation_id' => $this->reservation->id,
@@ -245,11 +207,7 @@ class MultiplePaymentCheckoutTest extends TestCase
     // gateway — not the legacy payment_gateway binding (Stripe by default, the fake gateway here).
     public function test_bare_webhook_url_reaches_the_only_configured_gateway()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank transfer'],
-        ]);
-
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank transfer']]);
 
         $this->post('/resrv/api/webhook', [
             'reservation_id' => $this->reservation->id,
@@ -284,14 +242,7 @@ class MultiplePaymentCheckoutTest extends TestCase
 
     public function test_selecting_invalid_gateway_returns_error()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake_one' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake One',
-            ],
-        ]);
-
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['fake_one' => ['label' => 'Fake One']]);
 
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -313,18 +264,10 @@ class MultiplePaymentCheckoutTest extends TestCase
     {
         $this->signInAdmin();
 
-        Config::set('resrv-config.payment_gateways', [
-            'fake_one' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake One',
-            ],
-            'fake_two' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake Two',
-            ],
+        $this->useGateways([
+            'fake_one' => ['label' => 'Fake One'],
+            'fake_two' => ['label' => 'Fake Two'],
         ]);
-
-        app()->forgetInstance(PaymentGatewayManager::class);
 
         $this->reservation->update([
             'payment_gateway' => 'fake_two',

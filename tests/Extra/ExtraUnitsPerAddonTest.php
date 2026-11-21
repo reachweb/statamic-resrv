@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Extra;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -27,7 +26,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 class ExtraUnitsPerAddonTest extends TestCase
 {
     use CreatesEntries;
-    use RefreshDatabase;
 
     public $entries;
 

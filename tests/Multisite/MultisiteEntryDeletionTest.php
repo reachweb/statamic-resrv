@@ -7,6 +7,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
@@ -15,6 +16,8 @@ use Statamic\Facades\Site;
 
 class MultisiteEntryDeletionTest extends TestCase
 {
+    use CreatesEntries;
+
     protected $originEntry;
 
     protected $localizedEntry;
@@ -77,10 +80,8 @@ class MultisiteEntryDeletionTest extends TestCase
         ]);
 
         // Availability is always stored against the origin id, not the localization id.
-        Availability::factory()->create([
-            'statamic_id' => $this->originEntry->id(),
-            'rate_id' => $rate->id,
-            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+        $this->createAvailabilityForEntry($this->originEntry, 150, 2, $rate->id, dates: [
+            today()->addDay()->isoFormat('YYYY-MM-DD'),
         ]);
 
         return $rate;

@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Unit;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Enums\AddonBlocker;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra;
@@ -15,7 +14,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 class AddonQuoteTest extends TestCase
 {
     use CreatesEntries;
-    use RefreshDatabase;
 
     // Every caller trusts price() to re-price what the entry can book, for every stay, and to leave
     // the rest alone with a reason: the CP syncs the rows by their keys, and the checkout rejects

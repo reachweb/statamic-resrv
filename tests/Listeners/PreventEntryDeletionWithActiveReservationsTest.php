@@ -2,15 +2,14 @@
 
 namespace Reach\StatamicResrv\Tests\Listeners;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class PreventEntryDeletionWithActiveReservationsTest extends TestCase
 {
-    use RefreshDatabase;
+    use CreatesEntries;
 
     protected function setUp(): void
     {
@@ -23,10 +22,8 @@ class PreventEntryDeletionWithActiveReservationsTest extends TestCase
         $item = $this->makeStatamicItemWithResrvAvailabilityField();
         $rate = Rate::factory()->create(['collection' => 'pages']);
 
-        Availability::factory()->create([
-            'statamic_id' => $item->id(),
-            'rate_id' => $rate->id,
-            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+        $this->createAvailabilityForEntry($item, 150, 2, $rate->id, dates: [
+            today()->addDay()->isoFormat('YYYY-MM-DD'),
         ]);
 
         Reservation::factory()->create([
@@ -51,10 +48,8 @@ class PreventEntryDeletionWithActiveReservationsTest extends TestCase
         $item = $this->makeStatamicItemWithResrvAvailabilityField();
         $rate = Rate::factory()->create(['collection' => 'pages']);
 
-        Availability::factory()->create([
-            'statamic_id' => $item->id(),
-            'rate_id' => $rate->id,
-            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+        $this->createAvailabilityForEntry($item, 150, 2, $rate->id, dates: [
+            today()->addDay()->isoFormat('YYYY-MM-DD'),
         ]);
 
         $itemId = $item->id();
@@ -71,10 +66,8 @@ class PreventEntryDeletionWithActiveReservationsTest extends TestCase
         $item = $this->makeStatamicItemWithResrvAvailabilityField();
         $rate = Rate::factory()->create(['collection' => 'pages']);
 
-        Availability::factory()->create([
-            'statamic_id' => $item->id(),
-            'rate_id' => $rate->id,
-            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+        $this->createAvailabilityForEntry($item, 150, 2, $rate->id, dates: [
+            today()->addDay()->isoFormat('YYYY-MM-DD'),
         ]);
 
         Reservation::factory()->expired()->create([

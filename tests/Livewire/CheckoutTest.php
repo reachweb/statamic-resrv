@@ -16,7 +16,6 @@ use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Facades\Price;
-use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Livewire\CheckoutForm;
@@ -1432,16 +1431,9 @@ class CheckoutTest extends TestCase
 
     public function test_surcharge_is_applied_when_gateway_is_selected()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'surcharge' => ['type' => 'percent', 'amount' => 4],
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card'],
+            'paypal' => ['label' => 'PayPal', 'surcharge' => ['type' => 'percent', 'amount' => 4]],
         ]);
 
         session(['resrv_reservation' => $this->reservation->id]);
@@ -1459,16 +1451,9 @@ class CheckoutTest extends TestCase
 
     public function test_surcharge_is_removed_on_reset()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'surcharge' => ['type' => 'percent', 'amount' => 4],
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card'],
+            'paypal' => ['label' => 'PayPal', 'surcharge' => ['type' => 'percent', 'amount' => 4]],
         ]);
 
         session(['resrv_reservation' => $this->reservation->id]);
@@ -1491,16 +1476,9 @@ class CheckoutTest extends TestCase
 
     public function test_switching_gateways_updates_surcharge()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'surcharge' => ['type' => 'percent', 'amount' => 4],
-            ],
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
+        $this->useGateways([
+            'paypal' => ['label' => 'PayPal', 'surcharge' => ['type' => 'percent', 'amount' => 4]],
+            'stripe' => ['label' => 'Credit Card'],
         ]);
 
         session(['resrv_reservation' => $this->reservation->id]);
@@ -1525,13 +1503,7 @@ class CheckoutTest extends TestCase
 
     public function test_single_gateway_auto_applies_surcharge()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'surcharge' => ['type' => 'percent', 'amount' => 4],
-            ],
-        ]);
+        $this->useGateways(['paypal' => ['label' => 'PayPal', 'surcharge' => ['type' => 'percent', 'amount' => 4]]]);
 
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -1547,16 +1519,9 @@ class CheckoutTest extends TestCase
 
     public function test_fixed_surcharge_amount()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'surcharge' => ['type' => 'fixed', 'amount' => 5],
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card'],
+            'paypal' => ['label' => 'PayPal', 'surcharge' => ['type' => 'fixed', 'amount' => 5]],
         ]);
 
         session(['resrv_reservation' => $this->reservation->id]);
@@ -1575,13 +1540,7 @@ class CheckoutTest extends TestCase
     public function test_mount_clears_stale_surcharge_before_sidebar_renders()
     {
         Config::set('resrv-config.payment', 'full');
-        Config::set('resrv-config.payment_gateways', [
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'surcharge' => ['type' => 'percent', 'amount' => 4],
-            ],
-        ]);
+        $this->useGateways(['paypal' => ['label' => 'PayPal', 'surcharge' => ['type' => 'percent', 'amount' => 4]]]);
 
         // A prior step-3 pass left a non-zero surcharge on the reservation. After a refresh,
         // Livewire's step/selectedGateway are back to defaults, but the sidebar reads straight
@@ -1603,13 +1562,7 @@ class CheckoutTest extends TestCase
     public function test_refresh_after_gateway_selection_recovers_from_stale_surcharge_in_full_mode()
     {
         Config::set('resrv-config.payment', 'full');
-        Config::set('resrv-config.payment_gateways', [
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'surcharge' => ['type' => 'percent', 'amount' => 4],
-            ],
-        ]);
+        $this->useGateways(['paypal' => ['label' => 'PayPal', 'surcharge' => ['type' => 'percent', 'amount' => 4]]]);
 
         // Simulate a prior step-3 pass: surcharge was applied, then the user refreshed
         // (Livewire state is gone, but payment_surcharge persists in the DB).
@@ -1632,13 +1585,7 @@ class CheckoutTest extends TestCase
     public function test_refresh_after_gateway_selection_recovers_from_stale_surcharge_in_everything_mode()
     {
         Config::set('resrv-config.payment', 'everything');
-        Config::set('resrv-config.payment_gateways', [
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'surcharge' => ['type' => 'percent', 'amount' => 4],
-            ],
-        ]);
+        $this->useGateways(['paypal' => ['label' => 'PayPal', 'surcharge' => ['type' => 'percent', 'amount' => 4]]]);
 
         $this->reservation->update([
             'payment_surcharge' => '4.00',
@@ -1658,16 +1605,9 @@ class CheckoutTest extends TestCase
 
     public function test_coupon_applied_after_gateway_selection_cancels_intent_and_returns_to_step_two()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'surcharge' => ['type' => 'percent', 'amount' => 4],
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card'],
+            'paypal' => ['label' => 'PayPal', 'surcharge' => ['type' => 'percent', 'amount' => 4]],
         ]);
 
         $dynamic = DynamicPricing::factory()->withCoupon()->create();
@@ -1842,16 +1782,9 @@ class CheckoutTest extends TestCase
 
     public function test_gateway_is_hidden_when_payment_below_min()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['min' => 200],
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card', 'amount_limits' => ['min' => 200]],
+            'paypal' => ['label' => 'PayPal'],
         ]);
 
         session(['resrv_reservation' => $this->reservation->id]);
@@ -1866,16 +1799,9 @@ class CheckoutTest extends TestCase
 
     public function test_gateway_is_hidden_when_payment_above_max()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['max' => 50],
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card', 'amount_limits' => ['max' => 50]],
+            'paypal' => ['label' => 'PayPal'],
         ]);
 
         session(['resrv_reservation' => $this->reservation->id]);
@@ -1890,17 +1816,9 @@ class CheckoutTest extends TestCase
 
     public function test_single_surviving_gateway_after_filter_auto_selects()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['min' => 500],
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'surcharge' => ['type' => 'fixed', 'amount' => 5],
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card', 'amount_limits' => ['min' => 500]],
+            'paypal' => ['label' => 'PayPal', 'surcharge' => ['type' => 'fixed', 'amount' => 5]],
         ]);
 
         session(['resrv_reservation' => $this->reservation->id]);
@@ -1917,17 +1835,9 @@ class CheckoutTest extends TestCase
 
     public function test_gateway_that_cannot_be_constructed_is_left_out_and_reported()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'paypal' => [
-                'class' => UnconstructibleGateway::class,
-                'label' => 'PayPal',
-                'amount_limits' => ['max' => 200],
-            ],
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['max' => 200],
-            ],
+        $this->useGateways([
+            'paypal' => ['class' => UnconstructibleGateway::class, 'label' => 'PayPal', 'amount_limits' => ['max' => 200]],
+            'stripe' => ['label' => 'Credit Card', 'amount_limits' => ['max' => 200]],
         ]);
 
         Exceptions::fake();
@@ -1975,17 +1885,9 @@ class CheckoutTest extends TestCase
 
     public function test_error_when_all_gateways_filtered_out()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['min' => 500],
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'amount_limits' => ['min' => 1000],
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card', 'amount_limits' => ['min' => 500]],
+            'paypal' => ['label' => 'PayPal', 'amount_limits' => ['min' => 1000]],
         ]);
 
         session(['resrv_reservation' => $this->reservation->id]);
@@ -2001,16 +1903,9 @@ class CheckoutTest extends TestCase
 
     public function test_error_when_every_gateway_the_amount_allows_fails_to_load()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => UnconstructibleGateway::class,
-                'label' => 'Credit Card',
-            ],
-            'paypal' => [
-                'class' => UnconstructibleGateway::class,
-                'label' => 'PayPal',
-                'amount_limits' => ['min' => 500],
-            ],
+        $this->useGateways([
+            'stripe' => ['class' => UnconstructibleGateway::class, 'label' => 'Credit Card'],
+            'paypal' => ['class' => UnconstructibleGateway::class, 'label' => 'PayPal', 'amount_limits' => ['min' => 500]],
         ]);
 
         Exceptions::fake();
@@ -2032,15 +1927,9 @@ class CheckoutTest extends TestCase
 
     public function test_picker_drops_a_gateway_that_stopped_loading_after_it_was_shown()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card'],
+            'paypal' => ['label' => 'PayPal'],
         ]);
 
         Exceptions::fake();
@@ -2070,15 +1959,9 @@ class CheckoutTest extends TestCase
 
     public function test_stale_picker_refusing_a_broken_gateway_keeps_another_tabs_payment()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card'],
+            'paypal' => ['label' => 'PayPal'],
         ]);
 
         Exceptions::fake();
@@ -2114,15 +1997,9 @@ class CheckoutTest extends TestCase
 
     public function test_stale_picker_refusing_a_broken_gateway_keeps_a_payment_started_while_it_loads()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card'],
+            'paypal' => ['label' => 'PayPal'],
         ]);
 
         Exceptions::fake();
@@ -2155,18 +2032,9 @@ class CheckoutTest extends TestCase
 
     public function test_select_gateway_bounces_to_step_2_when_no_gateway_remains()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['min' => 50, 'max' => 200],
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'amount_limits' => ['min' => 50, 'max' => 200],
-                'surcharge' => ['type' => 'fixed', 'amount' => 5],
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card', 'amount_limits' => ['min' => 50, 'max' => 200]],
+            'paypal' => ['label' => 'PayPal', 'amount_limits' => ['min' => 50, 'max' => 200], 'surcharge' => ['type' => 'fixed', 'amount' => 5]],
         ]);
 
         session(['resrv_reservation' => $this->reservation->id]);
@@ -2192,17 +2060,9 @@ class CheckoutTest extends TestCase
 
     public function test_select_gateway_auto_selects_when_only_one_remains()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'amount_limits' => ['min' => 50, 'max' => 200],
-                'surcharge' => ['type' => 'fixed', 'amount' => 5],
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card'],
+            'paypal' => ['label' => 'PayPal', 'amount_limits' => ['min' => 50, 'max' => 200], 'surcharge' => ['type' => 'fixed', 'amount' => 5]],
         ]);
 
         session(['resrv_reservation' => $this->reservation->id]);
@@ -2222,15 +2082,9 @@ class CheckoutTest extends TestCase
 
     public function test_coupon_component_is_hidden_on_gateway_selection_step()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card'],
+            'paypal' => ['label' => 'PayPal'],
         ]);
 
         session(['resrv_reservation' => $this->reservation->id]);
@@ -2252,17 +2106,9 @@ class CheckoutTest extends TestCase
 
     public function test_select_gateway_cancels_stale_intent_when_bouncing_to_step_2()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['min' => 50, 'max' => 200],
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'amount_limits' => ['min' => 50, 'max' => 200],
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card', 'amount_limits' => ['min' => 50, 'max' => 200]],
+            'paypal' => ['label' => 'PayPal', 'amount_limits' => ['min' => 50, 'max' => 200]],
         ]);
 
         session(['resrv_reservation' => $this->reservation->id]);
@@ -2291,20 +2137,10 @@ class CheckoutTest extends TestCase
 
     public function test_select_gateway_cancels_stale_intent_when_keeping_picker_open()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-            ],
-            'offline' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Offline',
-                'amount_limits' => ['max' => 200],
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card'],
+            'paypal' => ['label' => 'PayPal'],
+            'offline' => ['label' => 'Offline', 'amount_limits' => ['max' => 200]],
         ]);
 
         session(['resrv_reservation' => $this->reservation->id]);
@@ -2373,10 +2209,9 @@ class CheckoutTest extends TestCase
         // Like a Cardlink order before it reaches the bank: the provider can't void it, but it still
         // takes the payment at the same URL.
         Config::set('resrv-config.payment', 'everything');
-        Config::set('resrv-config.payment_gateways', [
+        $this->useGateways([
             'fakeredirect' => ['class' => FakeRedirectGateway::class, 'label' => 'Bank', 'surcharge' => ['type' => 'fixed', 'amount' => 4]],
         ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
         $gateway = app(PaymentGatewayManager::class)->gateway('fakeredirect');
         $gateway->cancelSucceeds = false;
 
@@ -2414,10 +2249,7 @@ class CheckoutTest extends TestCase
     public function test_step_one_keeps_a_stored_intent_payable_or_voids_it_before_the_payment_changes()
     {
         Config::set('resrv-config.payment', 'everything');
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => ['class' => FakePaymentGateway::class, 'label' => 'Card', 'surcharge' => ['type' => 'fixed', 'amount' => 4]],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['fake' => ['label' => 'Card', 'surcharge' => ['type' => 'fixed', 'amount' => 4]]]);
         $gateway = app(PaymentGatewayManager::class)->gateway('fake');
 
         session(['resrv_reservation' => $this->reservation->id]);
@@ -2496,10 +2328,7 @@ class CheckoutTest extends TestCase
 
     public function test_a_stored_intent_is_not_resumed_when_the_amount_changes_during_the_retrieve()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fakeredirect' => ['class' => FakeRedirectGateway::class, 'label' => 'Bank'],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['fakeredirect' => ['class' => FakeRedirectGateway::class, 'label' => 'Bank']]);
         $gateway = app(PaymentGatewayManager::class)->gateway('fakeredirect');
         $gateway->cancelSucceeds = false;
         // Another tab applies a coupon (or the hold expires) while the provider is asked.
@@ -2622,9 +2451,7 @@ class CheckoutTest extends TestCase
 
     public function test_redirect_gateway_sends_the_customer_to_the_provider_url_unchanged()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fakeredirect' => ['class' => FakeRedirectGateway::class, 'label' => 'Fake Redirect'],
-        ]);
+        $this->useGateways(['fakeredirect' => ['class' => FakeRedirectGateway::class, 'label' => 'Fake Redirect']]);
 
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -2636,13 +2463,8 @@ class CheckoutTest extends TestCase
 
     public function test_amount_limits_compare_payment_not_including_surcharge()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['max' => 100],
-                'surcharge' => ['type' => 'percent', 'amount' => 10],
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card', 'amount_limits' => ['max' => 100], 'surcharge' => ['type' => 'percent', 'amount' => 10]],
         ]);
 
         session(['resrv_reservation' => $this->reservation->id]);

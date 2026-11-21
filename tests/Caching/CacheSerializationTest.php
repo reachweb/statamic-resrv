@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Caching;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Facades\AvailabilityField;
@@ -20,8 +19,6 @@ use Statamic\Fields\Field;
  */
 class CacheSerializationTest extends TestCase
 {
-    use RefreshDatabase;
-
     // Mirror a hardened install: serialize the in-memory array store and apply
     // allowed_classes. Statamic then upgrades `false` to its partial allow-list at boot.
     protected function resolveApplicationConfiguration($app)

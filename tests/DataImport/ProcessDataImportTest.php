@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\DataImport;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Helpers\DataImport;
@@ -13,8 +12,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class ProcessDataImportTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_import_creates_default_rate_when_rate_id_omitted_and_no_rates_exist()
     {
         $item = $this->makeStatamicItem();

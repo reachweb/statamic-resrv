@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\ActivityLog;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Reach\StatamicResrv\Events\ReservationCancelled;
@@ -14,11 +13,12 @@ use Reach\StatamicResrv\Models\AvailabilityChange;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class AvailabilityChangeReservationTest extends TestCase
 {
-    use RefreshDatabase;
+    use CreatesEntries;
 
     public $item;
 
@@ -33,17 +33,10 @@ class AvailabilityChangeReservationTest extends TestCase
         $this->item = $this->makeStatamicItem();
         $this->rate = Rate::factory()->create(['collection' => 'pages']);
 
-        Availability::factory()
-            ->count(2)
-            ->sequence(
-                ['date' => today()->isoFormat('YYYY-MM-DD')],
-                ['date' => today()->addDay()->isoFormat('YYYY-MM-DD')],
-            )
-            ->create([
-                'statamic_id' => $this->item->id(),
-                'rate_id' => $this->rate->id,
-                'available' => 3,
-            ]);
+        $this->createAvailabilityForEntry($this->item, 150, 3, $this->rate->id, dates: [
+            today()->isoFormat('YYYY-MM-DD'),
+            today()->addDay()->isoFormat('YYYY-MM-DD'),
+        ]);
     }
 
     private function dispatchEventAndCatchException(object $event): void

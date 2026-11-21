@@ -50,6 +50,7 @@ class AvailabilityCollectionTest extends TestCase
         return $this->makeStatamicItemWithAvailability(collection: 'pages', available: $available, price: $price, title: $title);
     }
 
+    // Overrides CreatesEntries::createCheckoutEntry(): this one creates the pages collection without saving its blueprint.
     protected function createCheckoutEntry(): \Statamic\Entries\Entry
     {
         $this->ensureCollectionExists('pages');
@@ -504,20 +505,7 @@ class AvailabilityCollectionTest extends TestCase
         $localized->save();
 
         $rate = Rate::factory()->create(['collection' => 'rooms', 'slug' => 'default', 'title' => 'Default']);
-        Availability::factory()
-            ->count(4)
-            ->sequence(
-                ['date' => today()],
-                ['date' => today()->addDay()],
-                ['date' => today()->addDays(2)],
-                ['date' => today()->addDays(3)],
-            )
-            ->create([
-                'statamic_id' => $origin->id(),
-                'available' => 1,
-                'price' => 50,
-                'rate_id' => $rate->id,
-            ]);
+        $this->createAvailabilityForEntry($origin, 50, 1, $rate->id, 4);
 
         Site::setCurrent('el');
 
@@ -551,20 +539,7 @@ class AvailabilityCollectionTest extends TestCase
         $localized->save();
 
         $rate = Rate::factory()->create(['collection' => 'rooms', 'slug' => 'default', 'title' => 'Default']);
-        Availability::factory()
-            ->count(4)
-            ->sequence(
-                ['date' => today()],
-                ['date' => today()->addDay()],
-                ['date' => today()->addDays(2)],
-                ['date' => today()->addDays(3)],
-            )
-            ->create([
-                'statamic_id' => $origin->id(),
-                'available' => 1,
-                'price' => 50,
-                'rate_id' => $rate->id,
-            ]);
+        $this->createAvailabilityForEntry($origin, 50, 1, $rate->id, 4);
 
         Site::setCurrent('el');
 
@@ -600,20 +575,7 @@ class AvailabilityCollectionTest extends TestCase
         $localized->save();
 
         $rate = Rate::factory()->create(['collection' => 'rooms', 'slug' => 'default', 'title' => 'Default']);
-        Availability::factory()
-            ->count(4)
-            ->sequence(
-                ['date' => today()],
-                ['date' => today()->addDay()],
-                ['date' => today()->addDays(2)],
-                ['date' => today()->addDays(3)],
-            )
-            ->create([
-                'statamic_id' => $origin->id(),
-                'available' => 1,
-                'price' => 50,
-                'rate_id' => $rate->id,
-            ]);
+        $this->createAvailabilityForEntry($origin, 50, 1, $rate->id, 4);
 
         // Browsing the Greek site: only the Greek localization is listed.
         Site::setCurrent('el');

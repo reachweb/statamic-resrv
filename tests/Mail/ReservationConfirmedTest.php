@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Mail;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Reach\StatamicResrv\Mail\ReservationConfirmed;
 use Reach\StatamicResrv\Mail\ReservationMade;
@@ -13,8 +12,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationConfirmedTest extends TestCase
 {
-    use RefreshDatabase;
-
     // A confirmation can be resent long after booking, by which point the entry may have been
     // deleted. entry() then returns the emptyEntry() array, so the template must not dereference
     // it as an object.

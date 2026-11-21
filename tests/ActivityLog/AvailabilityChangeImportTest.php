@@ -2,18 +2,17 @@
 
 namespace Reach\StatamicResrv\Tests\ActivityLog;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Reach\StatamicResrv\Jobs\ProcessDataImport;
-use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\AvailabilityChange;
 use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class AvailabilityChangeImportTest extends TestCase
 {
-    use RefreshDatabase;
+    use CreatesEntries;
 
     public $item;
 
@@ -46,18 +45,10 @@ class AvailabilityChangeImportTest extends TestCase
 
     public function test_an_import_logs_the_values_it_writes_in_one_batch()
     {
-        Availability::factory()
-            ->count(2)
-            ->sequence(
-                ['date' => today()->addDay()->isoFormat('YYYY-MM-DD')],
-                ['date' => today()->addDays(2)->isoFormat('YYYY-MM-DD')],
-            )
-            ->create([
-                'statamic_id' => $this->item->id(),
-                'rate_id' => $this->rate->id,
-                'available' => 2,
-                'price' => 100,
-            ]);
+        $this->createAvailabilityForEntry($this->item, 100, 2, $this->rate->id, dates: [
+            today()->addDay()->isoFormat('YYYY-MM-DD'),
+            today()->addDays(2)->isoFormat('YYYY-MM-DD'),
+        ]);
 
         $this->cacheImport([
             [
@@ -112,12 +103,8 @@ class AvailabilityChangeImportTest extends TestCase
             'pricing_type' => 'independent',
         ]);
 
-        Availability::factory()->create([
-            'statamic_id' => $this->item->id(),
-            'rate_id' => $this->rate->id,
-            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
-            'available' => 2,
-            'price' => 100,
+        $this->createAvailabilityForEntry($this->item, 100, 2, $this->rate->id, dates: [
+            today()->addDay()->isoFormat('YYYY-MM-DD'),
         ]);
 
         $this->cacheImport([

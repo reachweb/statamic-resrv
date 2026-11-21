@@ -2,14 +2,11 @@
 
 namespace Reach\StatamicResrv\Tests\Utilities;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class UtilityCpTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

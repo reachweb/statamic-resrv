@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Rate;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -12,6 +11,7 @@ use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
 /**
@@ -21,7 +21,7 @@ use Reach\StatamicResrv\Tests\TestCase;
  */
 class RateUnitsPerAddonTest extends TestCase
 {
-    use RefreshDatabase;
+    use CreatesEntries;
 
     protected function setUp(): void
     {
@@ -44,18 +44,7 @@ class RateUnitsPerAddonTest extends TestCase
 
         $startDate = now()->startOfDay();
 
-        Availability::factory()
-            ->count(2)
-            ->sequence(
-                ['date' => $startDate],
-                ['date' => $startDate->copy()->addDay()],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $rate->id,
-                'price' => 100,
-                'available' => 5,
-            ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $rate->id, 2, from: $startDate);
 
         return [$entry, $rate, $startDate];
     }

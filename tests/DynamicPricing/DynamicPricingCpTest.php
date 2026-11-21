@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\DynamicPricing;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Models\DynamicPricing;
@@ -12,7 +11,7 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class DynamicPricingCpTest extends TestCase
 {
-    use CreatesEntries, RefreshDatabase;
+    use CreatesEntries;
 
     protected function setUp(): void
     {

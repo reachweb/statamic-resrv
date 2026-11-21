@@ -2,17 +2,17 @@
 
 namespace Reach\StatamicResrv\Tests\ActivityLog;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\AvailabilityChange;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class AvailabilityChangeCpTest extends TestCase
 {
-    use RefreshDatabase;
+    use CreatesEntries;
 
     public $item;
 
@@ -29,18 +29,10 @@ class AvailabilityChangeCpTest extends TestCase
         $this->item = $this->makeStatamicItem();
         $this->rate = Rate::factory()->create(['collection' => 'pages']);
 
-        Availability::factory()
-            ->count(2)
-            ->sequence(
-                ['date' => today()->isoFormat('YYYY-MM-DD')],
-                ['date' => today()->addDay()->isoFormat('YYYY-MM-DD')],
-            )
-            ->create([
-                'statamic_id' => $this->item->id(),
-                'rate_id' => $this->rate->id,
-                'available' => 2,
-                'price' => 50,
-            ]);
+        $this->createAvailabilityForEntry($this->item, 50, 2, $this->rate->id, dates: [
+            today()->isoFormat('YYYY-MM-DD'),
+            today()->addDay()->isoFormat('YYYY-MM-DD'),
+        ]);
     }
 
     private function updatePayload(array $overrides = []): array

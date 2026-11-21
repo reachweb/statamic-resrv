@@ -2,8 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Livewire;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Config;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilityMultiResults;
@@ -39,7 +37,6 @@ use Statamic\Facades\Blueprint;
 class AvailabilityResultsUnitsPerAddonTest extends TestCase
 {
     use CreatesEntries;
-    use RefreshDatabase;
 
     public $date;
 
@@ -73,22 +70,6 @@ class AvailabilityResultsUnitsPerAddonTest extends TestCase
         ]);
 
         ResrvEntry::whereItemId($this->entry->id())->extras()->attach($this->portTaxes->id);
-    }
-
-    protected function createCheckoutEntry(): Entry
-    {
-        $this->findOrCreateCollection('pages');
-
-        $entry = Entry::make()
-            ->collection('pages')
-            ->slug('checkout')
-            ->data(['title' => 'Checkout']);
-
-        $entry->save();
-
-        Config::set('resrv-config.checkout_entry', $entry->id());
-
-        return $entry;
     }
 
     protected function addDoubleRate(): Rate

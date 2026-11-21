@@ -383,6 +383,20 @@ class TestCase extends AddonTestCase
     }
 
     /**
+     * Set resrv-config.payment_gateways, where a gateway without a class is a FakePaymentGateway,
+     * and drop the PaymentGatewayManager singleton, which reads that config only when it is built.
+     */
+    protected function useGateways(array $gateways): void
+    {
+        config(['resrv-config.payment_gateways' => array_map(
+            fn (array $gateway) => $gateway + ['class' => FakePaymentGateway::class],
+            $gateways,
+        )]);
+
+        $this->app->forgetInstance(PaymentGatewayManager::class);
+    }
+
+    /**
      * Bind a payment gateway mock whose refund() runs exactly once, returning $outcome or
      * throwing it when it is an exception.
      */

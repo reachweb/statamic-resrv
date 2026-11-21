@@ -50,22 +50,6 @@ class AvailabilityMultiResultsTest extends TestCase
         $this->travelTo(today()->setHour(12));
     }
 
-    protected function createCheckoutEntry(): Entry
-    {
-        $this->findOrCreateCollection('pages');
-
-        $entry = Entry::make()
-            ->collection('pages')
-            ->slug('checkout')
-            ->data(['title' => 'Checkout']);
-
-        $entry->save();
-
-        Config::set('resrv-config.checkout_entry', $entry->id());
-
-        return $entry;
-    }
-
     protected function getEntryAndRates(): array
     {
         $entryId = $this->advancedEntries->first()->id();
@@ -89,20 +73,7 @@ class AvailabilityMultiResultsTest extends TestCase
             'title' => 'Children',
         ]);
 
-        Availability::factory()
-            ->count(4)
-            ->sequence(
-                ['date' => today()],
-                ['date' => today()->addDay()],
-                ['date' => today()->addDays(2)],
-                ['date' => today()->addDays(3)],
-            )
-            ->create([
-                'available' => $available,
-                'price' => 30,
-                'statamic_id' => $entry->id(),
-                'rate_id' => $childrenRate->id,
-            ]);
+        $this->createAvailabilityForEntry($entry, 30, $available, $childrenRate->id, 4);
 
         $adultsRate = Rate::forEntry($entry->id())->where('slug', 'adults')->first();
 

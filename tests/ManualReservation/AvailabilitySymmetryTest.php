@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\ManualReservation;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -21,7 +20,7 @@ use Statamic\Entries\Entry;
 
 class AvailabilitySymmetryTest extends TestCase
 {
-    use CreatesEntries, RefreshDatabase;
+    use CreatesEntries;
 
     private function entryWithStock(int $available = 2): Entry
     {

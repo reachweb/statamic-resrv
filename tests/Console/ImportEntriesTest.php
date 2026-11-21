@@ -2,14 +2,11 @@
 
 namespace Reach\StatamicResrv\Tests\Console;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class ImportEntriesTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_can_import_entries()
     {
         $item = $this->makeStatamicItemWithResrvAvailabilityField();

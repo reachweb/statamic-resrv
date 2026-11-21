@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Livewire;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -11,7 +10,6 @@ use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Livewire\Extras;
 use Reach\StatamicResrv\Livewire\Options;
 use Reach\StatamicResrv\Models\ChildReservation;
-use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra as ResrvExtra;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
@@ -32,7 +30,6 @@ use Statamic\Facades\Blueprint;
 class AvailabilityMultiResultsUnitsPerAddonTest extends TestCase
 {
     use CreatesEntries;
-    use RefreshDatabase;
 
     public $date;
 
@@ -41,58 +38,6 @@ class AvailabilityMultiResultsUnitsPerAddonTest extends TestCase
         parent::setUp();
         $this->travelTo(today()->setHour(12));
         $this->date = now()->addDay()->setTime(12, 0, 0);
-    }
-
-    protected function createCheckoutEntry(): Entry
-    {
-        $this->findOrCreateCollection('pages');
-
-        $entry = Entry::make()
-            ->collection('pages')
-            ->slug('checkout')
-            ->data(['title' => 'Checkout']);
-
-        $entry->save();
-
-        Config::set('resrv-config.checkout_entry', $entry->id());
-
-        return $entry;
-    }
-
-    /**
-     * @return array{0: Entry, 1: Rate, 2: Rate, 3: ResrvExtra} [$entry, $double, $single, $portTaxes]
-     */
-    protected function createCabinEntry(): array
-    {
-        // 4 availability rows (today..today+3) on the 'double' rate cover the searched nights today+1/today+2.
-        $entry = $this->makeStatamicItemWithAvailability(
-            collection: 'cabins',
-            available: 5,
-            price: 100,
-            rateSlug: 'double',
-        );
-
-        $double = Rate::where('collection', 'cabins')->where('slug', 'double')->firstOrFail();
-
-        $single = Rate::factory()->relative()->shared()->unitsPerAddon(2)->create([
-            'collection' => 'cabins',
-            'slug' => 'single',
-            'title' => 'Single occupancy',
-            'base_rate_id' => $double->id,
-            'modifier_type' => 'percent',
-            'modifier_operation' => 'decrease',
-            'modifier_amount' => 25,
-        ]);
-
-        $portTaxes = ResrvExtra::factory()->fixed()->create([
-            'name' => 'Port taxes',
-            'slug' => 'port-taxes',
-            'price' => '350',
-        ]);
-
-        ResrvEntry::whereItemId($entry->id())->extras()->attach($portTaxes->id);
-
-        return [$entry, $double, $single, $portTaxes];
     }
 
     protected function searchPayload(): array

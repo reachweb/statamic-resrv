@@ -2,19 +2,14 @@
 
 namespace Reach\StatamicResrv\Tests\Mail;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
-use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
-use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Mail\ReservationRefunded;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationRefundedTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_refunded_email_for_a_paid_reservation_shows_the_charged_amount()
     {
         $item = $this->makeStatamicItem();
@@ -147,11 +142,10 @@ class ReservationRefundedTest extends TestCase
 
     public function test_an_offline_gateway_refund_hedges_on_whether_the_payment_arrived()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => ['class' => FakePaymentGateway::class, 'label' => 'Fake Online'],
+        $this->useGateways([
+            'fake' => ['label' => 'Fake Online'],
             'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
         ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
 
         $item = $this->makeStatamicItem();
 
@@ -174,11 +168,10 @@ class ReservationRefundedTest extends TestCase
 
     public function test_an_offline_booking_marked_paid_in_the_cp_is_promised_back_like_the_cp_says()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => ['class' => FakePaymentGateway::class, 'label' => 'Fake Online'],
+        $this->useGateways([
+            'fake' => ['label' => 'Fake Online'],
             'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
         ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
 
         $item = $this->makeStatamicItem();
 

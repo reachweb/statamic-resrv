@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Extra;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Reach\StatamicResrv\Data\ReservationData;
@@ -15,8 +14,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class AffiliateFrontTest extends TestCase
 {
-    use RefreshDatabase;
-
     public $item;
 
     protected function setUp(): void

@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Availabilty;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Events\ReservationExpired;
@@ -10,11 +9,12 @@ use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class AvailabilityEventsTest extends TestCase
 {
-    use RefreshDatabase;
+    use CreatesEntries;
 
     protected function setUp(): void
     {
@@ -26,15 +26,10 @@ class AvailabilityEventsTest extends TestCase
         $item = $this->makeStatamicItem();
         $rate = Rate::factory()->create(['collection' => 'pages']);
 
-        Availability::factory()
-            ->count(2)
-            ->sequence(
-                ['date' => today()->isoFormat('YYYY-MM-DD')],
-                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
-            )
-            ->create(
-                ['statamic_id' => $item->id(), 'rate_id' => $rate->id]
-            );
+        $this->createAvailabilityForEntry($item, 150, 2, $rate->id, dates: [
+            today()->isoFormat('YYYY-MM-DD'),
+            today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+        ]);
 
         $reservation = Reservation::factory()
             ->withRate($rate->id)
@@ -129,12 +124,7 @@ class AvailabilityEventsTest extends TestCase
         $item = $this->makeStatamicItem();
         $rate = Rate::factory()->create(['collection' => 'pages']);
 
-        Availability::factory()->create([
-            'statamic_id' => $item->id(),
-            'rate_id' => $rate->id,
-            'date' => today()->isoFormat('YYYY-MM-DD'),
-            'available' => 5,
-        ]);
+        $this->createAvailabilityForEntry($item, 150, 5, $rate->id, dates: [today()->isoFormat('YYYY-MM-DD')]);
 
         $normal = Reservation::factory()->withRate($rate->id)->create([
             'item_id' => $item->id(),
@@ -171,12 +161,7 @@ class AvailabilityEventsTest extends TestCase
         $item = $this->makeStatamicItem();
         $rate = Rate::factory()->create(['collection' => 'pages']);
 
-        Availability::factory()->create([
-            'statamic_id' => $item->id(),
-            'rate_id' => $rate->id,
-            'date' => today()->isoFormat('YYYY-MM-DD'),
-            'available' => 5,
-        ]);
+        $this->createAvailabilityForEntry($item, 150, 5, $rate->id, dates: [today()->isoFormat('YYYY-MM-DD')]);
 
         $normal = Reservation::factory()->withRate($rate->id)->create([
             'item_id' => $item->id(),
@@ -212,12 +197,7 @@ class AvailabilityEventsTest extends TestCase
         $item = $this->makeStatamicItem();
         $rate = Rate::factory()->create(['collection' => 'pages']);
 
-        Availability::factory()->create([
-            'statamic_id' => $item->id(),
-            'rate_id' => $rate->id,
-            'date' => today()->isoFormat('YYYY-MM-DD'),
-            'available' => 5,
-        ]);
+        $this->createAvailabilityForEntry($item, 150, 5, $rate->id, dates: [today()->isoFormat('YYYY-MM-DD')]);
 
         $normal = Reservation::factory()->withRate($rate->id)->create([
             'item_id' => $item->id(),

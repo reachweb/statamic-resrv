@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Reservation;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Enums\ReservationEmailEvent;
@@ -18,8 +17,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationEmailConfigurationTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_entry_checkout_mapping_wins_over_other_candidates()
     {
         $item = $this->makeStatamicItem();

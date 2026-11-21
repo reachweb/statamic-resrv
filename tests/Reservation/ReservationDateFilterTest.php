@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Reservation;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Filters\ReservationMadeDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDate;
 use Reach\StatamicResrv\Models\Reservation;
@@ -10,8 +9,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationDateFilterTest extends TestCase
 {
-    use RefreshDatabase;
-
     // 'After' must use date semantics like the 'between' branch: a reservation made at 09:00 on
     // the picked day is not "after" that day. The previous raw `where > midnight` matched it.
     public function test_made_date_filter_after_excludes_rows_from_the_picked_day()

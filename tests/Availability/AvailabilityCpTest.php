@@ -3,7 +3,6 @@
 namespace Reach\StatamicResrv\Tests\Availabilty;
 
 use Carbon\Carbon;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Reach\StatamicResrv\Events\ReservationRefunded;
@@ -11,11 +10,12 @@ use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class AvailabilityCpTest extends TestCase
 {
-    use RefreshDatabase;
+    use CreatesEntries;
 
     protected function setUp(): void
     {
@@ -108,16 +108,7 @@ class AvailabilityCpTest extends TestCase
         $item = $this->makeStatamicItem();
         $rate = Rate::factory()->create(['collection' => 'pages']);
 
-        Availability::factory()
-            ->count(2)
-            ->sequence(
-                ['date' => today()],
-                ['date' => today()->add(1, 'day')]
-            )
-            ->create([
-                'statamic_id' => $item->id(),
-                'rate_id' => $rate->id,
-            ]);
+        $this->createAvailabilityForEntry($item, 150, 2, $rate->id, 2);
 
         $response = $this->get(cp_route('resrv.availability.index', [$item->id(), $rate->id]));
         $response->assertStatus(200)->assertSee($item->id());
@@ -442,16 +433,10 @@ class AvailabilityCpTest extends TestCase
         $item = $this->makeStatamicItem();
         $rate = Rate::factory()->create(['collection' => 'pages']);
 
-        Availability::factory()
-            ->count(2)
-            ->sequence(
-                ['date' => today()->isoFormat('YYYY-MM-DD')],
-                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
-            )
-            ->create([
-                'statamic_id' => $item->id(),
-                'rate_id' => $rate->id,
-            ]);
+        $this->createAvailabilityForEntry($item, 150, 2, $rate->id, dates: [
+            today()->isoFormat('YYYY-MM-DD'),
+            today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+        ]);
 
         $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
@@ -703,11 +688,8 @@ class AvailabilityCpTest extends TestCase
         $item = $this->makeStatamicItem();
         $rate = Rate::factory()->create(['collection' => 'pages']);
 
-        Availability::factory()->create([
-            'statamic_id' => $item->id(),
-            'rate_id' => $rate->id,
-            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
-            'available' => 8,
+        $this->createAvailabilityForEntry($item, 150, 8, $rate->id, dates: [
+            today()->addDay()->isoFormat('YYYY-MM-DD'),
         ]);
 
         // A manual hold has no deadline by default and releases like a confirmed booking's refund
@@ -782,11 +764,8 @@ class AvailabilityCpTest extends TestCase
         $item = $this->makeStatamicItem();
         $rate = Rate::factory()->create(['collection' => 'pages']);
 
-        Availability::factory()->create([
-            'statamic_id' => $item->id(),
-            'rate_id' => $rate->id,
-            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
-            'available' => 8,
+        $this->createAvailabilityForEntry($item, 150, 8, $rate->id, dates: [
+            today()->addDay()->isoFormat('YYYY-MM-DD'),
         ]);
 
         // affects_availability=false never restores stock, so it must not block the edit.
@@ -1094,12 +1073,7 @@ class AvailabilityCpTest extends TestCase
             'affects_availability' => false,
         ]);
 
-        Availability::factory()->create([
-            'statamic_id' => $item->id(),
-            'rate_id' => $rate->id,
-            'date' => $date,
-            'available' => 4,
-        ]);
+        $this->createAvailabilityForEntry($item, 150, 4, $rate->id, dates: [$date]);
 
         $this->deleteJson(cp_route('resrv.availability.delete'), [
             'statamic_id' => $item->id(),
@@ -1283,10 +1257,8 @@ class AvailabilityCpTest extends TestCase
         $item = $this->makeStatamicItem();
         $rate = Rate::factory()->create(['collection' => 'pages']);
 
-        Availability::factory()->create([
-            'statamic_id' => $item->id(),
-            'rate_id' => $rate->id,
-            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+        $this->createAvailabilityForEntry($item, 150, 2, $rate->id, dates: [
+            today()->addDay()->isoFormat('YYYY-MM-DD'),
         ]);
 
         // Reservation exists but is expired (terminal) — should not block.
@@ -1685,12 +1657,7 @@ class AvailabilityCpTest extends TestCase
             'available' => 4,
             'pending' => ['r92'],
         ]);
-        Availability::factory()->create([
-            'statamic_id' => $item->id(),
-            'rate_id' => $rate->id,
-            'date' => $deleteDate,
-            'available' => 4,
-        ]);
+        $this->createAvailabilityForEntry($item, 150, 4, $rate->id, dates: [$deleteDate]);
 
         // A fresh in-progress checkout in another tab of the same session.
         $held = Reservation::factory()->create([

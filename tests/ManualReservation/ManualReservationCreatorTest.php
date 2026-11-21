@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\ManualReservation;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
@@ -15,9 +14,7 @@ use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Exceptions\ManualReservationException;
 use Reach\StatamicResrv\Exceptions\OptionsException;
 use Reach\StatamicResrv\Facades\Price;
-use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
-use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Mail\ReservationConfirmed as ReservationConfirmedMail;
 use Reach\StatamicResrv\Models\Affiliate;
@@ -41,7 +38,7 @@ use Statamic\Facades\User;
 
 class ManualReservationCreatorTest extends TestCase
 {
-    use CreatesEntries, RefreshDatabase;
+    use CreatesEntries;
 
     protected function setUp(): void
     {
@@ -542,20 +539,7 @@ class ManualReservationCreatorTest extends TestCase
             'published' => false,
             'order' => 2,
         ]);
-        Availability::factory()
-            ->count(4)
-            ->sequence(
-                ['date' => today()],
-                ['date' => today()->addDay()],
-                ['date' => today()->addDays(2)],
-                ['date' => today()->addDays(3)],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $unpublished->id,
-                'available' => 5,
-                'price' => '999',
-            ]);
+        $this->createAvailabilityForEntry($entry, 999, 5, $unpublished->id, 4);
 
         $quote = $this->creator()->quote($this->baseInput($entry, ['rate_id' => null]));
 
@@ -674,16 +658,9 @@ class ManualReservationCreatorTest extends TestCase
     public function test_gateway_surcharge_is_computed_on_the_requested_amount()
     {
         $this->configurePaymentEntry();
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake',
-                'surcharge' => ['type' => 'percent', 'amount' => 10],
-            ],
-            'offline' => [
-                'class' => OfflinePaymentGateway::class,
-                'label' => 'Offline',
-            ],
+        $this->useGateways([
+            'fake' => ['label' => 'Fake', 'surcharge' => ['type' => 'percent', 'amount' => 10]],
+            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Offline'],
         ]);
 
         $entry = $this->makeStatamicItemWithAvailability(available: 4);
@@ -709,13 +686,7 @@ class ManualReservationCreatorTest extends TestCase
     public function test_creation_refuses_a_gateway_surcharge_that_moved_since_the_quote()
     {
         $this->configurePaymentEntry();
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake',
-                'surcharge' => ['type' => 'fixed', 'amount' => 25],
-            ],
-        ]);
+        $this->useGateways(['fake' => ['label' => 'Fake', 'surcharge' => ['type' => 'fixed', 'amount' => 25]]]);
 
         $entry = $this->makeStatamicItemWithAvailability(available: 4);
 
@@ -1396,10 +1367,7 @@ class ManualReservationCreatorTest extends TestCase
 
     public function test_an_online_gateway_without_webhook_support_cannot_collect_a_payment()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'webhookless' => ['class' => WebhooklessOnlineGateway::class, 'label' => 'Webhookless'],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['webhookless' => ['class' => WebhooklessOnlineGateway::class, 'label' => 'Webhookless']]);
 
         $entry = $this->makeStatamicItemWithAvailability(available: 4);
 
@@ -1415,15 +1383,10 @@ class ManualReservationCreatorTest extends TestCase
 
     public function test_a_blank_gateway_on_a_nonzero_creation_is_pinned_to_the_default_gateway()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake',
-                'surcharge' => ['type' => 'percent', 'amount' => 10],
-            ],
+        $this->useGateways([
+            'fake' => ['label' => 'Fake', 'surcharge' => ['type' => 'percent', 'amount' => 10]],
             'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Offline'],
         ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
 
         $entry = $this->makeStatamicItemWithAvailability(available: 4);
 
@@ -1437,14 +1400,7 @@ class ManualReservationCreatorTest extends TestCase
 
     public function test_a_blank_gateway_creation_enforces_the_default_gateways_amount_limits()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake',
-                'amount_limits' => ['max' => 50],
-            ],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['fake' => ['label' => 'Fake', 'amount_limits' => ['max' => 50]]]);
 
         $entry = $this->makeStatamicItemWithAvailability(available: 4);
 

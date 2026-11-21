@@ -760,10 +760,7 @@ class ReservationStatusTest extends TestCase
 
     public function test_offline_payment_reservations_cannot_be_cancelled_online()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => ['class' => OfflinePaymentGateway::class],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class]]);
 
         $reservation = $this->makeReservation([
             'payment_gateway' => 'offline',
@@ -790,10 +787,7 @@ class ReservationStatusTest extends TestCase
 
     public function test_unknown_recorded_gateway_blocks_self_cancel_but_keeps_the_page_viewable()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => ['class' => FakePaymentGateway::class],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['fake' => []]);
 
         // The gateway this reservation paid through has since been removed from config —
         // nobody can move that money automatically, so the page must degrade to view-only
@@ -977,10 +971,7 @@ class ReservationStatusTest extends TestCase
 
     public function test_cancelled_email_asks_admins_to_refund_manually_for_offline_gateways()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => ['class' => OfflinePaymentGateway::class],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class]]);
 
         $reservation = $this->makeReservation([
             'status' => 'refunded',
@@ -1025,10 +1016,7 @@ class ReservationStatusTest extends TestCase
 
     public function test_offline_bookings_confirmed_before_v6_6_are_not_reported_as_paid()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => ['class' => OfflinePaymentGateway::class],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class]]);
 
         // The checkout confirmed it before any money arrived, so the migration settles it unresolved.
         $reservation = $this->makeReservation([
@@ -1182,10 +1170,7 @@ class ReservationStatusTest extends TestCase
 
     public function test_offline_reservations_stay_view_only_even_after_the_window_expires()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => ['class' => OfflinePaymentGateway::class],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class]]);
 
         // Expired window + offline gateway: the no-refund path is for online self-service
         // payments only — offline arrangements are "contact us" by design.
